@@ -198,7 +198,7 @@ class MsgPart(object):
         self.pid = pid
 
     def __str__(self):
-        content = self.content
+        content = self._prepend_seperator(self.content)
         if self.pid is not None:
             content = "[%s]" % self.pid + content
         return self.tag + content
@@ -234,7 +234,6 @@ class MsgPart(object):
         return value
 
     def _set_content(self, value):
-        value = self._prepend_seperator(value)
         self._content = value
 
     content = property(_get_content, _set_content, None,
