@@ -168,6 +168,24 @@ class HeaderPart(object):
     def _get_timestamp(self):
         return self._timestamp
 
+    def parse_timestamp(self):
+        """Parses the syslog timestamp string into a struct_time object.
+
+        """
+        # syslog RFC3164 timestamps don't include a year value so
+        # we must substitute it manually
+        localtime = time.localtime()
+        year = localtime.tm_year
+        full_ts = "%d %s" % (year, self._timestamp)
+        result = time.strptime(full_ts, "%Y %b %d %H:%M:%S")
+        # In the first day of a year (tm_mon==1) we may still
+        # receive some values from the last day of the previous year
+        if result.tm_mon == 12 and localtime.tm_mon == 1:
+            year = year - 1
+            full_ts = "%d %s" % (year, self._timestamp)
+            result = time.strptime(full_ts, "%Y %b %d %H:%M:%S")
+        return result
+
     def _calculate_current_timestamp(self):
         localtime = time.localtime()
         day = time.strftime("%d", localtime)
