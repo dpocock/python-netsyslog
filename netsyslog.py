@@ -1,4 +1,5 @@
 # Copyright (C) 2005 Graham Ashton <ashtong@users.sourceforge.net>
+# Copyright (C) 2010 Daniel Pocock http://danielpocock.com
 #
 # This module is free software, and you may redistribute it and/or modify
 # it under the same terms as Python itself, so long as this copyright message
