@@ -117,13 +117,16 @@ class HeaderPart(object):
     def _get_timestamp(self):
         return self._timestamp
 
-    def _calculate_current_timestamp(self):
-        localtime = time.localtime()
-        day = time.strftime("%d", localtime)
+    def _format_timestamp_rfc3164(self, _timestamp):
+        day = time.strftime("%d", _timestamp)
         if day[0] == "0":
             day = " " + day[1:]
-        value = time.strftime("%b %%s %H:%M:%S", localtime)
+        value = time.strftime("%b %%s %H:%M:%S", _timestamp)
         return value % day
+
+    def _calculate_current_timestamp(self):
+        localtime = time.localtime()
+        return self._format_timestamp_rfc3164(localtime)
 
     def _timestamp_is_valid(self, value):
         if value is None:
