@@ -47,7 +47,9 @@ __version__ = "0.1.0"
 
 
 import os
+import logging
 import socket
+import SocketServer
 import sys
 import time
 
@@ -464,3 +466,136 @@ class Logger(object):
 
         """
         self._send_packet_to_hosts(packet)
+
+class SyslogTCPHandler(SocketServer.BaseRequestHandler):
+
+    BUF_SIZE = 2048
+    MAX_CACHED = 4096
+    MAX_FRAME = 2048
+    TERM_CHAR = "\n"
+
+    def setup(self):
+        """Setup variables used by this instance."""
+        self.logger = logging.getLogger(__name__)
+        self.cached = None
+        self.frame_size = None
+        self.logger.info("incoming TCP connection accepted")
+
+    def handle(self):
+        """Handle the incoming bytes, try to resolve them to frames."""
+        data = self.request.recv(self.BUF_SIZE)
+        while len(data) > 0:
+            if self.cached is None:
+                self.cached = data
+            else:
+                if (len(self.cached) + len(data)) > self.MAX_CACHED:
+                    # too many bytes
+                    self.logger.warning("too much data")
+                    self.request.close()
+                    return
+                self.cached = self.cached + data
+
+            if len(self.cached) > 8:
+                if self.frame_size is None:
+                    if self.cached[0] == "<":
+                        # non-transparent framing
+                        self.frame_size = -1
+                    else:
+                        # octet counting
+                        sp = self.cached.find(" ")
+                        if sp < 0:
+                            # didn't find frame length terminated by a space
+                            self.logger.warning("suspected octet-framing, but frame length not terminated by a space")
+                            self.request.close()
+                            return
+                        try:
+                            self.frame_size = int(self.cached[0:sp])
+                        except ValueError:
+                            # frame length is not a number
+                            self.logger.warning("frame length is not a number")
+                            self.request.close()
+                            return
+                        if self.frame_size < 1 or self.frame_size > self.MAX_FRAME:
+                            # specified frame size too small/big
+                            self.logger.warning("specified frame size is too big or too small")
+                            self.request.close()
+                            return
+                        # now we parsed the size, trim the frame size string from the
+                        # beginning of the frame
+                        self.cached = self.cached[sp+1:]
+
+                try:
+                    if self.frame_size > 0:
+                        if len(self.cached) >= self.frame_size:
+                            self.handle_frame_text(self.frame_size, self.frame_size)
+                    else:
+                        term_idx = self.cached.find(self.TERM_CHAR)
+                        if term_idx >= 0:
+                            # do not consider the TERM_CHAR as part of the frame
+                            self.handle_frame_text(term_idx, term_idx + 1)
+                except Exception as e:
+                    self.logger.warning("exception occurred parsing/handling a frame: " + str(e))
+                    self.request.close()
+                    return
+            # loop again
+            data = self.request.recv(self.BUF_SIZE)
+
+        # we get here if the received data size == 0 (connection closed)
+        self.request.close()
+
+    def handle_frame_text(self, frame_len, skip_len):
+        """Handle the frame text, convert to L{Packet}."""
+        # extract the frame itself
+        frame_text = self.cached[0:frame_len]
+
+        # manage the buffer, there may be more data available
+        if len(self.cached) > skip_len:
+            self.cached = self.cached[skip_len:]
+        else:
+            self.cached = None
+        self.frame_size = None
+
+        # parse the frame
+        try:
+            frame = Packet.fromWire(frame_text)
+        except ParseError:
+            # these are errors we noticed
+            raise
+        except:
+            # these are errors the parser didn't correctly detect, should
+            # analyze them and improve the parser
+            raise ParseError("frame", "unexpected parsing error")
+
+        try:
+            self.handle_message(frame)
+        except:
+            # the application (subclass) raised some exception
+            raise
+
+    def handle_message(self, frame):
+        """Handle parsed Syslog frames.
+
+        Applications should override this method.
+
+        This default implementation prints some data from each frame.
+
+        """
+        pass
+
+class ThreadedSyslogServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
+    pass
+
+class Collector(object):
+    """Accept log messages from Syslog clients.
+
+    Accept Syslog messages over the network and pass them to the application.
+
+    """
+
+    def __init__(self, port=514, handler=SyslogTCPHandler):
+        address = ("0.0.0.0", port)
+        self.server = ThreadedSyslogServer(address, handler)
+
+    def run(self):
+        self.server.serve_forever()
+
