@@ -177,6 +177,34 @@ class PacketTest(unittest.TestCase):
         packet = netsyslog.Packet(DEFAULT_PRI, DEFAULT_HEADER, message)
         self.assertEqual(len(str(packet)), netsyslog.Packet.MAX_LEN)
 
+    def test_parse(self):
+        """Check that we can parse a message from the wire"""
+        packet = netsyslog.Packet.fromWire("<142>Mar 16 08:58:41 alpha1 foobar[1234]: testing")
+        self.assertEqual(packet.pri.severity, syslog.LOG_INFO)
+        self.assertEqual(packet.pri.facility, syslog.LOG_LOCAL1)
+        self.assertEqual(packet.header.hostname, "alpha1")
+        self.assertEqual(packet.msg.tag, "foobar")
+        self.assertEqual(packet.msg.pid, "1234")
+        self.assertEqual(packet.msg.content, "testing")
+
+        # now try with an unusual date (single digit for day of month):
+        packet = netsyslog.Packet.fromWire("<142>Mar  6 08:58:41 alpha1 foobar[1234]: testing")
+        self.assertEqual(packet.header.hostname, "alpha1")
+
+        try:
+            # just too short
+            packet = netsyslog.Packet.fromWire("<2>")
+            self.assert_(true)
+        except netsyslog.ParseError:
+            pass
+
+        try:
+            # timestamp single digit for day of month:
+            packet = netsyslog.Packet.fromWire("<142>Mar 6 08:58:41 alpha1 foobar[1234]: testing")
+            self.assert_(true)
+        except netsyslog.ParseError:
+            pass
+
 
 class LoggerTest(MockHeaderTest, MockMsgTest):
 

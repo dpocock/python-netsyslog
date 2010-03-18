@@ -51,6 +51,22 @@ import socket
 import sys
 import time
 
+class Error(Exception):
+    """Base class for exceptions in this module."""
+    pass
+
+class ParseError(Error):
+    """Exception raised for errors parsing frames from the wire.
+
+    Attributes:
+        field -- input expression in which the error occurred
+        msg   -- explanation of the error
+    """
+
+    def __init__(self, field, msg):
+        print field + ", " + msg
+        self.field = field
+        self.msg = msg
 
 class PriPart(object):
 
@@ -76,6 +92,19 @@ class PriPart(object):
         assert severity is not None
         self.facility = facility
         self.severity = severity
+
+    @classmethod
+    def fromWire(cls, pri_text):
+        """Initialise the object, specifying a numerical priority from the wire.
+        """
+        assert pri_text is not None
+        try:
+            pri_n = int(pri_text)
+        except ValueError:
+            raise ParseError("priority", "not numeric")
+        facility = pri_n & 0xf8
+        severity = pri_n & 0x07
+        return cls(facility, severity)
 
     def __str__(self):
         value = self.facility + self.severity
@@ -111,6 +140,25 @@ class HeaderPart(object):
         self.timestamp = timestamp
         self.hostname = hostname
 
+    @classmethod
+    def fromWire(cls, header_text):
+        """Initialise the object, specifying text from the wire.
+        """
+        assert header_text is not None
+
+        # timestamp (15 bytes), space (1 byte), hostname (at least one byte)
+        if len(header_text) < 17:
+            raise ParseError("header", "should be at least 17 bytes")
+        # timestamp is fixed length
+        if header_text[15] != " ":
+            raise ParseError("header", "16th byte should be a space")
+
+        timestamp = header_text[0:15]
+        if not cls._timestamp_is_valid(timestamp):
+            raise ParseError("header/timestamp", "invalid timestamp: '%s'" % timestamp)
+        hostname = header_text[16:]
+        return cls(timestamp, hostname)
+
     def __str__(self):
         return "%s %s" % (self.timestamp, self.hostname)
 
@@ -125,6 +173,7 @@ class HeaderPart(object):
         value = time.strftime("%b %%s %H:%M:%S", localtime)
         return value % day
 
+    @classmethod
     def _timestamp_is_valid(self, value):
         if value is None:
             return False
@@ -197,6 +246,32 @@ class MsgPart(object):
         self.content = content
         self.pid = pid
 
+    @classmethod
+    def fromWire(cls, message_text):
+        """Initialise the object, specifying text from the wire."""
+
+        assert message_text is not None
+
+        # look for the tag[PID] text
+        _colon = message_text.find(":")
+        if _colon < 0:
+            raise ParseError("message", "missing colon to separate tag from message")
+        tag_text = message_text[0:_colon]
+        begin_pid = tag_text.find("[")
+        end_pid = tag_text.find("]")
+        _pid = None
+        if begin_pid > -1:
+            if end_pid < 0:
+                # not a valid message
+                raise ParseError("message", "missing ']' in tag/pid section")
+            _tag = tag_text[0:begin_pid]
+            _pid = tag_text[begin_pid+1:end_pid]
+        else:
+            _tag = tag_text
+            _pid = None
+        _content = message_text[_colon+2:]
+        return cls(_tag, _content, _pid)
+
     def __str__(self):
         content = self._prepend_seperator(self.content)
         if self.pid is not None:
@@ -268,6 +343,36 @@ class Packet(object):
         self.pri = pri
         self.header = header
         self.msg = msg
+
+    @classmethod
+    def fromWire(cls, packet_text):
+        """Initialise the object, specifying packet text from the wire."""
+
+        assert packet_text is not None
+
+        if len(packet_text) < 6:
+            # not long enough
+            raise ParseError("frame", "too short")
+
+        if packet_text[0] != "<":
+            # not correct syntax
+            raise ParseError("frame", "should begin with '<'")
+
+        gt = packet_text.index(">", 1)
+        pri_text = packet_text[1:gt]
+
+        # skip the next space and the timestamp
+        sp = gt + 1 + 15
+        # now skip the hostname
+        sp = packet_text.index(" ", sp + 1)
+        header_text = packet_text[gt+1:sp]
+
+        msg_text = packet_text[sp+1:]
+
+        pri = PriPart.fromWire(pri_text)
+        header = HeaderPart.fromWire(header_text)
+        msg = MsgPart.fromWire(msg_text)
+        return cls(pri, header, msg)
 
     def __str__(self):
         message = "%s%s %s" % (self.pri, self.header, self.msg)
