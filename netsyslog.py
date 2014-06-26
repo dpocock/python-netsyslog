@@ -1,4 +1,5 @@
 # Copyright (C) 2005 Graham Ashton <ashtong@users.sourceforge.net>
+# Copyright (C) 2010 Daniel Pocock http://danielpocock.com
 #
 # This module is free software, and you may redistribute it and/or modify
 # it under the same terms as Python itself, so long as this copyright message
@@ -166,6 +167,24 @@ class HeaderPart(object):
 
     def _get_timestamp(self):
         return self._timestamp
+
+    def parse_timestamp(self):
+        """Parses the syslog timestamp string into a struct_time object.
+
+        """
+        # syslog RFC3164 timestamps don't include a year value so
+        # we must substitute it manually
+        localtime = time.localtime()
+        year = localtime.tm_year
+        full_ts = "%d %s" % (year, self._timestamp)
+        result = time.strptime(full_ts, "%Y %b %d %H:%M:%S")
+        # In the first day of a year (tm_mon==1) we may still
+        # receive some values from the last day of the previous year
+        if result.tm_mon == 12 and localtime.tm_mon == 1:
+            year = year - 1
+            full_ts = "%d %s" % (year, self._timestamp)
+            result = time.strptime(full_ts, "%Y %b %d %H:%M:%S")
+        return result
 
     def _format_timestamp_rfc3164(self, _timestamp):
         day = time.strftime("%d", _timestamp)
