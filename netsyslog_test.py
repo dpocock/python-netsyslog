@@ -1,4 +1,5 @@
 # Copyright (C) 2005 Graham Ashton <ashtong@users.sourceforge.net>
+# Copyright (C) 2010 Daniel Pocock http://danielpocock.com
 #
 # This module is free software, and you may redistribute it and/or modify
 # it under the same terms as Python itself, so long as this copyright message
@@ -186,6 +187,10 @@ class PacketTest(unittest.TestCase):
         self.assertEqual(packet.msg.tag, "foobar")
         self.assertEqual(packet.msg.pid, "1234")
         self.assertEqual(packet.msg.content, "testing")
+        parsed_ts = packet.header.parse_timestamp()
+        self.assertEqual(parsed_ts.tm_mon, 3)
+        self.assertEqual(parsed_ts.tm_mday, 16)
+        self.assertEqual(parsed_ts.tm_hour, 8)
 
         # now try with an unusual date (single digit for day of month):
         packet = netsyslog.Packet.fromWire("<142>Mar  6 08:58:41 alpha1 foobar[1234]: testing")
