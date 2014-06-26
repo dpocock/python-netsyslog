@@ -616,6 +616,8 @@ class Collector(object):
 
     def __init__(self, port=514, handler=SyslogTCPHandler):
         address = ("0.0.0.0", port)
+        ThreadedSyslogServer.daemon_threads = True
+        ThreadedSyslogServer.allow_reuse_address = True
         self.server = ThreadedSyslogServer(address, handler)
 
     def run(self):
