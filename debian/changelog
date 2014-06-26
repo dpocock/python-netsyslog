@@ -1,0 +1,5 @@
+python-netsyslog (0.1.0+dp1-1) unstable; urgency=low
+
+  * Initial packaging (Closes: #752766)
+
+ -- Daniel Pocock <daniel@pocock.pro>  Thu, 26 Jun 2014 14:01:44 +0200

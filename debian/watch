@@ -1,0 +1,3 @@
+version=3
+https://github.com/dpocock/python-netsyslog/tags \
+  .*/archive/(\d[\d\.]+)\.tar\.gz
