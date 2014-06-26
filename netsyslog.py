@@ -583,14 +583,14 @@ class SyslogTCPHandler(SocketServer.BaseRequestHandler):
         except ParseError:
             # these are errors we noticed
             raise
-        except:
+        except Exception:
             # these are errors the parser didn't correctly detect, should
             # analyze them and improve the parser
             raise ParseError("frame", "unexpected parsing error")
 
         try:
             self.handle_message(frame)
-        except:
+        except Exception:
             # the application (subclass) raised some exception
             raise
 
@@ -616,6 +616,8 @@ class Collector(object):
 
     def __init__(self, port=514, handler=SyslogTCPHandler):
         address = ("0.0.0.0", port)
+        ThreadedSyslogServer.daemon_threads = True
+        ThreadedSyslogServer.allow_reuse_address = True
         self.server = ThreadedSyslogServer(address, handler)
 
     def run(self):
