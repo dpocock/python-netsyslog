@@ -1,3 +1,9 @@
+python-netsyslog (0.1.0+dp2-1) unstable; urgency=low
+
+  * Latest release.
+
+ -- Daniel Pocock <daniel@pocock.pro>  Sat, 02 Aug 2014 12:13:50 +0200
+
 python-netsyslog (0.1.0+dp1-1) unstable; urgency=low
 
   * Initial packaging (Closes: #752766)
